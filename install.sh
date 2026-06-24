@@ -19,13 +19,44 @@ fail()  { echo "${RED}✗${RESET} $*" >&2; exit 1; }
 [[ "$(uname -s)" == "Darwin" ]] || fail "This installer is macOS only."
 [[ "$(uname -m)" == "arm64"  ]] || fail "Apple Silicon (M-series) required — Intel Macs are not supported."
 
-PY="$(command -v python3 || true)"
-[[ -n "$PY" ]] || fail "python3 not found. Install via Xcode CLT (xcode-select --install) or Homebrew (brew install python)."
+# Find a Python >= 3.10. macOS ships /usr/bin/python3 as 3.9 (too old for the
+# mlx gemma4 model files), so don't just grab `python3` — probe a list of
+# likely interpreters (newest first) and pick the first one that qualifies.
+# Honour an explicit override: PYTHON=/path/to/python ./install.sh
+py_ok() {  # py_ok <interpreter> -> prints "X.Y" and succeeds if >= 3.10
+  local p="$1" v
+  command -v "$p" >/dev/null 2>&1 || return 1
+  v="$("$p" -c 'import sys; print("%d.%d"%sys.version_info[:2])' 2>/dev/null)" || return 1
+  local maj="${v%%.*}" min="${v#*.}"
+  (( maj > 3 || (maj == 3 && min >= 10) )) || return 1
+  echo "$v"
+}
 
-PYV="$($PY -c 'import sys; print("%d.%d"%sys.version_info[:2])')"
-PYV_MAJOR="${PYV%.*}"; PYV_MINOR="${PYV#*.}"
-if (( PYV_MAJOR < 3 || (PYV_MAJOR == 3 && PYV_MINOR < 10) )); then
-  fail "Python >= 3.10 required (found $PYV at $PY)."
+PY=""; PYV=""
+CANDIDATES=(
+  ${PYTHON:-}
+  python3.13 python3.12 python3.11 python3.10
+  /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12
+  /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3.10
+  /opt/homebrew/bin/python3
+  python3
+)
+for cand in "${CANDIDATES[@]}"; do
+  [[ -n "$cand" ]] || continue
+  if PYV="$(py_ok "$cand")"; then
+    PY="$(command -v "$cand")"
+    break
+  fi
+done
+
+if [[ -z "$PY" ]]; then
+  sys="$(command -v python3 || echo none)"
+  sysv="$([[ "$sys" != none ]] && "$sys" -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null || echo "?")"
+  fail "Python >= 3.10 required (default python3 is $sysv at $sys).
+    Install a newer Python and re-run:
+      ${BOLD}brew install python@3.12${RESET}
+    or point the installer at an existing one:
+      ${BOLD}PYTHON=/path/to/python3.12 ./install.sh${RESET}"
 fi
 ok "Python $PYV at $PY"
 

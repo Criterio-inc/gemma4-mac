@@ -53,8 +53,10 @@ a friendlier front door. Set a different port with `gemma-web --port 8000`.
 
 - **macOS on Apple Silicon** (M1 / M2 / M3 / M4 / M5). Intel Macs are not
   supported — Gemma 4 e4b uses MLX which is Metal-only.
-- **Python ≥ 3.10** (3.13/3.14 from Homebrew works; the system Python in Xcode
-  CLT is fine too).
+- **Python ≥ 3.10.** Install via Homebrew (`brew install python@3.12`); 3.11–3.14
+  all work. The system `/usr/bin/python3` from Xcode CLT is **3.9 and too old** —
+  the installer detects and skips it automatically, picking a newer interpreter
+  if one is on your `PATH`. To force a specific one: `PYTHON=/path/to/python3.12 ./install.sh`.
 - **~5 GB free disk** for the 4-bit quantised model weights.
 - **16 GB RAM** is plenty. Peak inference is ~5.8 GB (vision encoder + LLM).
 - For Photos integration: **Photos.app** and one-time approval to let Terminal
