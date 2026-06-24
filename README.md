@@ -64,6 +64,19 @@ a friendlier front door. Set a different port with `gemma-web --port 8000`.
 
 ## Install
 
+**Easiest way (no terminal needed):**
+
+1. Download this project: green **Code** button on GitHub → **Download ZIP**.
+2. Double-click the ZIP to unpack it, then open the `gemma4-mac` folder.
+3. Double-click **`Install.command`**. A window opens and does everything.
+   - If macOS says *"cannot be opened because it is from an unidentified
+     developer"*, right-click `Install.command` → **Open** → **Open**.
+   - If your Mac doesn't have a new enough Python, the installer sets one up for
+     you automatically. Just type your Mac password if it asks (it stays hidden).
+4. When it says ✅ Done, double-click **`Gemma.command`** to start.
+
+**Prefer the terminal?**
+
 ```bash
 git clone https://github.com/fltman/gemma4-mac.git
 cd gemma4-mac
@@ -72,7 +85,8 @@ cd gemma4-mac
 
 The installer:
 
-1. Verifies Apple Silicon + Python ≥ 3.10
+1. Verifies Apple Silicon, then finds a Python ≥ 3.10 — installing one
+   automatically (via Homebrew) if the Mac only has the old system Python
 2. Creates `./venv` and installs Python deps: `mlx-lm` (from git main —
    PyPI lags behind on new architectures), `mlx-vlm`, `osxphotos`,
    `pillow-heif`, `holidays`, `imagehash`

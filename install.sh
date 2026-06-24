@@ -32,31 +32,65 @@ py_ok() {  # py_ok <interpreter> -> prints "X.Y" and succeeds if >= 3.10
   echo "$v"
 }
 
-PY=""; PYV=""
-CANDIDATES=(
-  ${PYTHON:-}
-  python3.13 python3.12 python3.11 python3.10
-  /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12
-  /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3.10
-  /opt/homebrew/bin/python3
-  python3
-)
-for cand in "${CANDIDATES[@]}"; do
-  [[ -n "$cand" ]] || continue
-  if PYV="$(py_ok "$cand")"; then
-    PY="$(command -v "$cand")"
-    break
-  fi
-done
+find_python() {  # sets PY/PYV to the first usable interpreter, or leaves them empty
+  PY=""; PYV=""
+  local cand candidates=(
+    ${PYTHON:-}
+    python3.13 python3.12 python3.11 python3.10
+    /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12
+    /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3.10
+    /opt/homebrew/bin/python3
+    python3
+  )
+  for cand in "${candidates[@]}"; do
+    [[ -n "$cand" ]] || continue
+    if PYV="$(py_ok "$cand")"; then
+      PY="$(command -v "$cand")"
+      return 0
+    fi
+  done
+  return 1
+}
 
-if [[ -z "$PY" ]]; then
+# Try to install a modern Python automatically so non-technical users don't
+# have to. Installs Homebrew first if it's missing. These steps may prompt for
+# the macOS account password (that's expected and safe).
+auto_install_python() {
+  local brew=""
+  for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    [[ -x "$b" ]] && { brew="$b"; break; }
+  done
+  command -v brew >/dev/null 2>&1 && brew="$(command -v brew)"
+
+  if [[ -z "$brew" ]]; then
+    warn "Homebrew (the tool that installs Python) isn't here yet — installing it now."
+    warn "macOS may ask for your Mac password. Type it and press Return (it won't show as you type)."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+      || { warn "Automatic Homebrew install didn't complete."; return 1; }
+    for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+      [[ -x "$b" ]] && { brew="$b"; break; }
+    done
+  fi
+  [[ -n "$brew" ]] || return 1
+
+  note "Installing Python 3.12 via Homebrew (a couple of minutes)…"
+  "$brew" install python@3.12 || { warn "brew install python@3.12 failed."; return 1; }
+  return 0
+}
+
+if ! find_python; then
   sys="$(command -v python3 || echo none)"
   sysv="$([[ "$sys" != none ]] && "$sys" -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null || echo "?")"
-  fail "Python >= 3.10 required (default python3 is $sysv at $sys).
-    Install a newer Python and re-run:
+  warn "The Python on this Mac is too old for Gemma (found $sysv; need 3.10 or newer)."
+  note "No problem — I'll set up a newer Python for you automatically."
+  if auto_install_python && find_python; then
+    : # success — fall through
+  else
+    fail "Couldn't set up Python automatically.
+    Please install it once by hand, then double-click Install.command (or run ./install.sh) again:
       ${BOLD}brew install python@3.12${RESET}
-    or point the installer at an existing one:
-      ${BOLD}PYTHON=/path/to/python3.12 ./install.sh${RESET}"
+    If Homebrew isn't installed, get it from ${BOLD}https://brew.sh${RESET} first."
+  fi
 fi
 ok "Python $PYV at $PY"
 
