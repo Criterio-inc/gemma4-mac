@@ -1,5 +1,6 @@
 venv/
 bin/
+Gemma.command
 __pycache__/
 *.pyc
 .DS_Store

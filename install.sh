@@ -3,8 +3,9 @@ set -euo pipefail
 
 # gemma-mlx installer (macOS / Apple Silicon)
 #  - creates ./venv
-#  - installs mlx-lm (git main) + mlx-vlm
-#  - generates ./bin/gemma and ./bin/gemma-photos wrappers
+#  - installs mlx-lm (git main) + mlx-vlm + flask
+#  - generates ./bin/gemma, gemma-photos, gemma-yearbook, gemma-web wrappers
+#  - generates ./Gemma.command (double-click launcher for the web UI)
 #  - adds aliases to ~/.zshrc (idempotent, marker-delimited block)
 
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
@@ -18,13 +19,78 @@ fail()  { echo "${RED}✗${RESET} $*" >&2; exit 1; }
 [[ "$(uname -s)" == "Darwin" ]] || fail "This installer is macOS only."
 [[ "$(uname -m)" == "arm64"  ]] || fail "Apple Silicon (M-series) required — Intel Macs are not supported."
 
-PY="$(command -v python3 || true)"
-[[ -n "$PY" ]] || fail "python3 not found. Install via Xcode CLT (xcode-select --install) or Homebrew (brew install python)."
+# Find a Python >= 3.10. macOS ships /usr/bin/python3 as 3.9 (too old for the
+# mlx gemma4 model files), so don't just grab `python3` — probe a list of
+# likely interpreters (newest first) and pick the first one that qualifies.
+# Honour an explicit override: PYTHON=/path/to/python ./install.sh
+py_ok() {  # py_ok <interpreter> -> prints "X.Y" and succeeds if >= 3.10
+  local p="$1" v
+  command -v "$p" >/dev/null 2>&1 || return 1
+  v="$("$p" -c 'import sys; print("%d.%d"%sys.version_info[:2])' 2>/dev/null)" || return 1
+  local maj="${v%%.*}" min="${v#*.}"
+  (( maj > 3 || (maj == 3 && min >= 10) )) || return 1
+  echo "$v"
+}
 
-PYV="$($PY -c 'import sys; print("%d.%d"%sys.version_info[:2])')"
-PYV_MAJOR="${PYV%.*}"; PYV_MINOR="${PYV#*.}"
-if (( PYV_MAJOR < 3 || (PYV_MAJOR == 3 && PYV_MINOR < 10) )); then
-  fail "Python >= 3.10 required (found $PYV at $PY)."
+find_python() {  # sets PY/PYV to the first usable interpreter, or leaves them empty
+  PY=""; PYV=""
+  local cand candidates=(
+    ${PYTHON:-}
+    python3.13 python3.12 python3.11 python3.10
+    /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12
+    /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3.10
+    /opt/homebrew/bin/python3
+    python3
+  )
+  for cand in "${candidates[@]}"; do
+    [[ -n "$cand" ]] || continue
+    if PYV="$(py_ok "$cand")"; then
+      PY="$(command -v "$cand")"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Try to install a modern Python automatically so non-technical users don't
+# have to. Installs Homebrew first if it's missing. These steps may prompt for
+# the macOS account password (that's expected and safe).
+auto_install_python() {
+  local brew=""
+  for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    [[ -x "$b" ]] && { brew="$b"; break; }
+  done
+  command -v brew >/dev/null 2>&1 && brew="$(command -v brew)"
+
+  if [[ -z "$brew" ]]; then
+    warn "Homebrew (the tool that installs Python) isn't here yet — installing it now."
+    warn "macOS may ask for your Mac password. Type it and press Return (it won't show as you type)."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+      || { warn "Automatic Homebrew install didn't complete."; return 1; }
+    for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+      [[ -x "$b" ]] && { brew="$b"; break; }
+    done
+  fi
+  [[ -n "$brew" ]] || return 1
+
+  note "Installing Python 3.12 via Homebrew (a couple of minutes)…"
+  "$brew" install python@3.12 || { warn "brew install python@3.12 failed."; return 1; }
+  return 0
+}
+
+if ! find_python; then
+  sys="$(command -v python3 || echo none)"
+  sysv="$([[ "$sys" != none ]] && "$sys" -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null || echo "?")"
+  warn "The Python on this Mac is too old for Gemma (found $sysv; need 3.10 or newer)."
+  note "No problem — I'll set up a newer Python for you automatically."
+  if auto_install_python && find_python; then
+    : # success — fall through
+  else
+    fail "Couldn't set up Python automatically.
+    Please install it once by hand, then double-click Install.command (or run ./install.sh) again:
+      ${BOLD}brew install python@3.12${RESET}
+    If Homebrew isn't installed, get it from ${BOLD}https://brew.sh${RESET} first."
+  fi
 fi
 ok "Python $PYV at $PY"
 
@@ -46,13 +112,15 @@ note "Installing dependencies (a few minutes on first run)"
 # osxphotos: read Photos library directly so iCloud-only items can be analysed.
 # pillow-heif: HEIC support for PIL (iPhone originals are HEIC by default).
 # holidays: country-aware holiday calendars for the yearbook curator.
+# flask: serves the local web UI (webapp.py) so everyday use needs no terminal.
 "$VENV/bin/pip" install --quiet --upgrade \
     "git+https://github.com/ml-explore/mlx-lm.git" \
     "mlx-vlm" \
     "osxphotos" \
     "pillow-heif" \
     "holidays" \
-    "imagehash"
+    "imagehash" \
+    "flask"
 ok "Python dependencies installed"
 
 # ---- wrappers ----
@@ -69,8 +137,23 @@ cat > "$BINDIR/gemma-yearbook" <<EOF
 #!/usr/bin/env bash
 exec "$VENV/bin/python" "$REPO_DIR/yearbook.py" "\$@"
 EOF
-chmod +x "$BINDIR/gemma" "$BINDIR/gemma-photos" "$BINDIR/gemma-yearbook"
+cat > "$BINDIR/gemma-web" <<EOF
+#!/usr/bin/env bash
+exec "$VENV/bin/python" "$REPO_DIR/webapp.py" "\$@"
+EOF
+chmod +x "$BINDIR/gemma" "$BINDIR/gemma-photos" "$BINDIR/gemma-yearbook" "$BINDIR/gemma-web"
 ok "Wrappers written to $BINDIR"
+
+# ---- double-clickable launcher (no terminal needed for everyday use) ----
+# Finder runs *.command in Terminal; this starts the web UI and opens the
+# browser. Users who don't want the terminal at all can keep this in the Dock.
+cat > "$REPO_DIR/Gemma.command" <<EOF
+#!/usr/bin/env bash
+# Double-click in Finder to launch the gemma4-mac web UI.
+exec "$VENV/bin/python" "$REPO_DIR/webapp.py"
+EOF
+chmod +x "$REPO_DIR/Gemma.command"
+ok "Launcher written to $REPO_DIR/Gemma.command (double-click in Finder)"
 
 # ---- shell aliases (zsh only — macOS default since Catalina) ----
 ZSHRC="$HOME/.zshrc"
@@ -92,6 +175,7 @@ $START
 alias gemma='$BINDIR/gemma'
 alias gemma-photos='$BINDIR/gemma-photos'
 alias gemma-yearbook='$BINDIR/gemma-yearbook'
+alias gemma-web='$BINDIR/gemma-web'
 $END
 EOF
 ok "Aliases added to ~/.zshrc"
@@ -103,5 +187,9 @@ echo "Open a new terminal (or run: ${BOLD}source ~/.zshrc${RESET}) and try:"
 echo "  ${BOLD}gemma${RESET} 'hej, vem är du?'"
 echo "  ${BOLD}gemma${RESET} -i path/to/photo.jpg 'beskriv vad du ser'"
 echo "  ${BOLD}gemma-photos${RESET} --dry-run    # after selecting photos in Photos.app"
+echo
+echo "Prefer a graphical UI instead of the terminal?"
+echo "  ${BOLD}gemma-web${RESET}                  # starts the local web UI + opens your browser"
+echo "  …or just ${BOLD}double-click Gemma.command${RESET} in Finder."
 echo
 echo "First run will download the model (~3.5 GB) from Hugging Face."

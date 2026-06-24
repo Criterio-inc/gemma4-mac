@@ -25,18 +25,57 @@ gemma-yearbook --year 2024 --dry-run                         # show what would b
 3–7 keywords, and writes both back into the photo's metadata in Photos. Default
 keyword behaviour merges with existing tags (no duplicates, nothing lost).
 
+### Web UI — no terminal needed
+
+Prefer clicking over typing? After installing, you get a local web app that
+wraps all of the above:
+
+```bash
+gemma-web                 # starts the server and opens your browser
+```
+
+…or just **double-click `Gemma.command`** in Finder. Everything binds to
+`127.0.0.1` only — nothing leaves your Mac. The page has four tabs:
+
+- **Chatt** — text chat with the model kept resident in memory, so there's no
+  ~6 s reload between prompts like the CLI has. Tokens stream as they generate.
+- **Bild & ljud** — drop in image(s) and/or an audio file and ask a question.
+- **Photos-taggning** — runs `gemma-photos` on your current Photos.app
+  selection with checkboxes for the flags; output streams live.
+- **Yearbook** — runs `gemma-yearbook` with year, count, album name and all
+  the tuning flags as form controls; defaults to a dry-run preview.
+
+The Photos and Yearbook tabs shell out to the same `photos_caption.py` /
+`yearbook.py` scripts the CLI uses, so behaviour is identical — the UI is just
+a friendlier front door. Set a different port with `gemma-web --port 8000`.
+
 ## Requirements
 
 - **macOS on Apple Silicon** (M1 / M2 / M3 / M4 / M5). Intel Macs are not
   supported — Gemma 4 e4b uses MLX which is Metal-only.
-- **Python ≥ 3.10** (3.13/3.14 from Homebrew works; the system Python in Xcode
-  CLT is fine too).
+- **Python ≥ 3.10.** Install via Homebrew (`brew install python@3.12`); 3.11–3.14
+  all work. The system `/usr/bin/python3` from Xcode CLT is **3.9 and too old** —
+  the installer detects and skips it automatically, picking a newer interpreter
+  if one is on your `PATH`. To force a specific one: `PYTHON=/path/to/python3.12 ./install.sh`.
 - **~5 GB free disk** for the 4-bit quantised model weights.
 - **16 GB RAM** is plenty. Peak inference is ~5.8 GB (vision encoder + LLM).
 - For Photos integration: **Photos.app** and one-time approval to let Terminal
   control it (macOS prompts the first time).
 
 ## Install
+
+**Easiest way (no terminal needed):**
+
+1. Download this project: green **Code** button on GitHub → **Download ZIP**.
+2. Double-click the ZIP to unpack it, then open the `gemma4-mac` folder.
+3. Double-click **`Install.command`**. A window opens and does everything.
+   - If macOS says *"cannot be opened because it is from an unidentified
+     developer"*, right-click `Install.command` → **Open** → **Open**.
+   - If your Mac doesn't have a new enough Python, the installer sets one up for
+     you automatically. Just type your Mac password if it asks (it stays hidden).
+4. When it says ✅ Done, double-click **`Gemma.command`** to start.
+
+**Prefer the terminal?**
 
 ```bash
 git clone https://github.com/fltman/gemma4-mac.git
@@ -46,13 +85,15 @@ cd gemma4-mac
 
 The installer:
 
-1. Verifies Apple Silicon + Python ≥ 3.10
+1. Verifies Apple Silicon, then finds a Python ≥ 3.10 — installing one
+   automatically (via Homebrew) if the Mac only has the old system Python
 2. Creates `./venv` and installs Python deps: `mlx-lm` (from git main —
    PyPI lags behind on new architectures), `mlx-vlm`, `osxphotos`,
    `pillow-heif`, `holidays`, `imagehash`
-3. Generates `bin/gemma`, `bin/gemma-photos` and `bin/gemma-yearbook`
-   wrapper scripts
-4. Adds three aliases to `~/.zshrc` inside an idempotent
+3. Generates `bin/gemma`, `bin/gemma-photos`, `bin/gemma-yearbook` and
+   `bin/gemma-web` wrapper scripts, plus a double-clickable `Gemma.command`
+   launcher
+4. Adds four aliases to `~/.zshrc` inside an idempotent
    `# >>> gemma-mlx >>>` block
 
 Open a new terminal (or `source ~/.zshrc`) and you're done.
