@@ -25,6 +25,30 @@ gemma-yearbook --year 2024 --dry-run                         # show what would b
 3–7 keywords, and writes both back into the photo's metadata in Photos. Default
 keyword behaviour merges with existing tags (no duplicates, nothing lost).
 
+### Web UI — no terminal needed
+
+Prefer clicking over typing? After installing, you get a local web app that
+wraps all of the above:
+
+```bash
+gemma-web                 # starts the server and opens your browser
+```
+
+…or just **double-click `Gemma.command`** in Finder. Everything binds to
+`127.0.0.1` only — nothing leaves your Mac. The page has four tabs:
+
+- **Chatt** — text chat with the model kept resident in memory, so there's no
+  ~6 s reload between prompts like the CLI has. Tokens stream as they generate.
+- **Bild & ljud** — drop in image(s) and/or an audio file and ask a question.
+- **Photos-taggning** — runs `gemma-photos` on your current Photos.app
+  selection with checkboxes for the flags; output streams live.
+- **Yearbook** — runs `gemma-yearbook` with year, count, album name and all
+  the tuning flags as form controls; defaults to a dry-run preview.
+
+The Photos and Yearbook tabs shell out to the same `photos_caption.py` /
+`yearbook.py` scripts the CLI uses, so behaviour is identical — the UI is just
+a friendlier front door. Set a different port with `gemma-web --port 8000`.
+
 ## Requirements
 
 - **macOS on Apple Silicon** (M1 / M2 / M3 / M4 / M5). Intel Macs are not
@@ -50,9 +74,10 @@ The installer:
 2. Creates `./venv` and installs Python deps: `mlx-lm` (from git main —
    PyPI lags behind on new architectures), `mlx-vlm`, `osxphotos`,
    `pillow-heif`, `holidays`, `imagehash`
-3. Generates `bin/gemma`, `bin/gemma-photos` and `bin/gemma-yearbook`
-   wrapper scripts
-4. Adds three aliases to `~/.zshrc` inside an idempotent
+3. Generates `bin/gemma`, `bin/gemma-photos`, `bin/gemma-yearbook` and
+   `bin/gemma-web` wrapper scripts, plus a double-clickable `Gemma.command`
+   launcher
+4. Adds four aliases to `~/.zshrc` inside an idempotent
    `# >>> gemma-mlx >>>` block
 
 Open a new terminal (or `source ~/.zshrc`) and you're done.

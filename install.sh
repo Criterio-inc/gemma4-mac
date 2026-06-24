@@ -3,8 +3,9 @@ set -euo pipefail
 
 # gemma-mlx installer (macOS / Apple Silicon)
 #  - creates ./venv
-#  - installs mlx-lm (git main) + mlx-vlm
-#  - generates ./bin/gemma and ./bin/gemma-photos wrappers
+#  - installs mlx-lm (git main) + mlx-vlm + flask
+#  - generates ./bin/gemma, gemma-photos, gemma-yearbook, gemma-web wrappers
+#  - generates ./Gemma.command (double-click launcher for the web UI)
 #  - adds aliases to ~/.zshrc (idempotent, marker-delimited block)
 
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
@@ -46,13 +47,15 @@ note "Installing dependencies (a few minutes on first run)"
 # osxphotos: read Photos library directly so iCloud-only items can be analysed.
 # pillow-heif: HEIC support for PIL (iPhone originals are HEIC by default).
 # holidays: country-aware holiday calendars for the yearbook curator.
+# flask: serves the local web UI (webapp.py) so everyday use needs no terminal.
 "$VENV/bin/pip" install --quiet --upgrade \
     "git+https://github.com/ml-explore/mlx-lm.git" \
     "mlx-vlm" \
     "osxphotos" \
     "pillow-heif" \
     "holidays" \
-    "imagehash"
+    "imagehash" \
+    "flask"
 ok "Python dependencies installed"
 
 # ---- wrappers ----
@@ -69,8 +72,23 @@ cat > "$BINDIR/gemma-yearbook" <<EOF
 #!/usr/bin/env bash
 exec "$VENV/bin/python" "$REPO_DIR/yearbook.py" "\$@"
 EOF
-chmod +x "$BINDIR/gemma" "$BINDIR/gemma-photos" "$BINDIR/gemma-yearbook"
+cat > "$BINDIR/gemma-web" <<EOF
+#!/usr/bin/env bash
+exec "$VENV/bin/python" "$REPO_DIR/webapp.py" "\$@"
+EOF
+chmod +x "$BINDIR/gemma" "$BINDIR/gemma-photos" "$BINDIR/gemma-yearbook" "$BINDIR/gemma-web"
 ok "Wrappers written to $BINDIR"
+
+# ---- double-clickable launcher (no terminal needed for everyday use) ----
+# Finder runs *.command in Terminal; this starts the web UI and opens the
+# browser. Users who don't want the terminal at all can keep this in the Dock.
+cat > "$REPO_DIR/Gemma.command" <<EOF
+#!/usr/bin/env bash
+# Double-click in Finder to launch the gemma4-mac web UI.
+exec "$VENV/bin/python" "$REPO_DIR/webapp.py"
+EOF
+chmod +x "$REPO_DIR/Gemma.command"
+ok "Launcher written to $REPO_DIR/Gemma.command (double-click in Finder)"
 
 # ---- shell aliases (zsh only — macOS default since Catalina) ----
 ZSHRC="$HOME/.zshrc"
@@ -92,6 +110,7 @@ $START
 alias gemma='$BINDIR/gemma'
 alias gemma-photos='$BINDIR/gemma-photos'
 alias gemma-yearbook='$BINDIR/gemma-yearbook'
+alias gemma-web='$BINDIR/gemma-web'
 $END
 EOF
 ok "Aliases added to ~/.zshrc"
@@ -103,5 +122,9 @@ echo "Open a new terminal (or run: ${BOLD}source ~/.zshrc${RESET}) and try:"
 echo "  ${BOLD}gemma${RESET} 'hej, vem är du?'"
 echo "  ${BOLD}gemma${RESET} -i path/to/photo.jpg 'beskriv vad du ser'"
 echo "  ${BOLD}gemma-photos${RESET} --dry-run    # after selecting photos in Photos.app"
+echo
+echo "Prefer a graphical UI instead of the terminal?"
+echo "  ${BOLD}gemma-web${RESET}                  # starts the local web UI + opens your browser"
+echo "  …or just ${BOLD}double-click Gemma.command${RESET} in Finder."
 echo
 echo "First run will download the model (~3.5 GB) from Hugging Face."

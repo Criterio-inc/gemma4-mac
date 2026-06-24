@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>gemma4-mac</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1f232c; --line: #2a2f3a;
+    --text: #e6e8ec; --muted: #9aa3b2; --accent: #7aa2f7; --accent-2: #9ece6a;
+    --warn: #e0af68; --err: #f7768e; --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 22px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  .status { margin-left: auto; display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+         background: #3a4152; margin-right: 6px; vertical-align: middle; }
+  .dot.on { background: var(--accent-2); }
+  nav { display: flex; gap: 4px; padding: 10px 18px 0; border-bottom: 1px solid var(--line);
+        background: var(--panel); }
+  nav button {
+    background: none; border: none; color: var(--muted); padding: 10px 16px;
+    font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0;
+  }
+  nav button:hover { color: var(--text); }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { max-width: 880px; margin: 0 auto; padding: 22px; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 5px; }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 9px 11px; font: inherit; font-size: 14px;
+  }
+  textarea { resize: vertical; min-height: 64px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 10px; }
+  .check { display: flex; align-items: center; gap: 7px; color: var(--text); font-size: 13px; }
+  .check input { width: auto; }
+  button.primary {
+    background: var(--accent); color: #0b1020; border: none; border-radius: 8px;
+    padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; margin-top: 16px;
+  }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  details { margin-top: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; }
+  summary { cursor: pointer; padding: 10px 0; color: var(--muted); font-size: 13px; }
+  .console {
+    background: #0a0c10; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+    margin-top: 16px; font: 12.5px/1.55 "SF Mono", ui-monospace, Menlo, monospace;
+    white-space: pre-wrap; word-break: break-word; max-height: 440px; overflow-y: auto; color: #c8d0dc;
+  }
+  .console:empty { display: none; }
+  .console .err { color: var(--err); }
+  /* chat */
+  #chatlog { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; min-height: 120px; }
+  .msg { padding: 10px 14px; border-radius: 12px; max-width: 85%; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #0b1020; }
+  .msg.bot { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line); }
+  .chatbar { display: flex; gap: 10px; align-items: flex-end; }
+  .chatbar textarea { flex: 1; }
+  .chatbar button { margin: 0; }
+  .ghost { background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+           border-radius: 8px; padding: 10px 14px; cursor: pointer; font: inherit; }
+  .filewrap { margin-top: 6px; }
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .thumbs img { height: 64px; border-radius: 6px; border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>gemma4-mac</h1>
+    <div class="sub">Gemma 4 e4b — allt körs lokalt på din Mac</div>
+  </div>
+  <div class="status">
+    <span><span class="dot" id="dot-text"></span>text</span>
+    <span><span class="dot" id="dot-vlm"></span>vision</span>
+  </div>
+</header>
+
+<nav>
+  <button data-tab="chat" class="active">Chatt</button>
+  <button data-tab="media">Bild &amp; ljud</button>
+  <button data-tab="photos">Photos-taggning</button>
+  <button data-tab="yearbook">Yearbook</button>
+</nav>
+
+<main>
+  <!-- CHAT -->
+  <section class="tab active" id="tab-chat">
+    <div id="chatlog"></div>
+    <div class="chatbar">
+      <textarea id="chat-input" placeholder="Skriv ett meddelande… (Enter skickar, Shift+Enter ny rad)"></textarea>
+      <button class="primary" id="chat-send" style="margin:0">Skicka</button>
+      <button class="ghost" id="chat-reset" title="Rensa historik">Rensa</button>
+    </div>
+  </section>
+
+  <!-- MEDIA -->
+  <section class="tab" id="tab-media">
+    <h2>Bild &amp; ljud</h2>
+    <p class="hint">Ladda upp en eller flera bilder och/eller en ljudfil och ställ en fråga. Allt analyseras lokalt.</p>
+    <label>Bild(er)</label>
+    <input type="file" id="media-images" accept="image/*" multiple class="filewrap" />
+    <div class="thumbs" id="media-thumbs"></div>
+    <label>Ljud (valfritt)</label>
+    <input type="file" id="media-audio" accept="audio/*" class="filewrap" />
+    <label>Fråga / instruktion</label>
+    <textarea id="media-prompt" placeholder="t.ex. Beskriv bilden i en mening / Transkribera ljudet / Sammanfatta i 3 punkter"></textarea>
+    <button class="primary" id="media-run">Analysera</button>
+    <div class="console" id="media-out"></div>
+  </section>
+
+  <!-- PHOTOS -->
+  <section class="tab" id="tab-photos">
+    <h2>Photos-taggning</h2>
+    <p class="hint">Öppna <b>Photos.app</b>, markera en eller flera bilder, och kör. Gemma skriver svensk bildtext + nyckelord
+       tillbaka i biblioteket. Börja gärna med <b>Förhandsvisning (dry-run)</b> för att se utan att skriva något.</p>
+    <label>Stil på bildtext</label>
+    <input type="text" id="ph-style" placeholder="kort beskrivande mening på svenska, max ~15 ord" />
+    <div class="checks">
+      <label class="check"><input type="checkbox" id="ph-dry" checked /> Förhandsvisning (skriv inget)</label>
+      <label class="check"><input type="checkbox" id="ph-explicit" /> Väv in plats/datum/personer i texten</label>
+      <label class="check"><input type="checkbox" id="ph-nocontext" /> Ignorera Photos-metadata</label>
+      <label class="check"><input type="checkbox" id="ph-nocaption" /> Bara nyckelord (ingen bildtext)</label>
+      <label class="check"><input type="checkbox" id="ph-nokeywords" /> Bara bildtext (inga nyckelord)</label>
+      <label class="check"><input type="checkbox" id="ph-replace" /> Ersätt befintliga nyckelord</label>
+    </div>
+    <button class="primary" id="ph-run">Kör på markerade foton</button>
+    <div class="console" id="ph-out"></div>
+  </section>
+
+  <!-- YEARBOOK -->
+  <section class="tab" id="tab-yearbook">
+    <h2>Yearbook</h2>
+    <p class="hint">Kuratera automatiskt fram ett balanserat årsalbum. Kör <b>Förhandsvisning</b> för att se urvalet
+       innan ett album skapas i Photos.</p>
+    <div class="row">
+      <div><label>År</label><input type="number" id="yb-year" placeholder="2024" /></div>
+      <div><label>Antal foton</label><input type="number" id="yb-count" placeholder="100" /></div>
+      <div><label>Albumnamn</label><input type="text" id="yb-album" placeholder="Yearbook 2024" /></div>
+    </div>
+    <div class="row">
+      <div><label>Helgkalender (landskoder)</label><input type="text" id="yb-holidays" placeholder="se (t.ex. se,us eller none)" /></div>
+    </div>
+    <details>
+      <summary>Avancerat — urval &amp; dedup</summary>
+      <div class="row">
+        <div><label>Max per scen</label><input type="number" id="yb-scene" placeholder="2" /></div>
+        <div><label>pHash-tröskel</label><input type="number" id="yb-sim" placeholder="14" /></div>
+        <div><label>Max per event/helg</label><input type="number" id="yb-cluster" placeholder="6" /></div>
+        <div><label>Max per resa</label><input type="number" id="yb-trip" placeholder="20" /></div>
+      </div>
+      <div class="row">
+        <div><label>Min foton för resa</label><input type="number" id="yb-tripsize" placeholder="8" /></div>
+        <div><label>Min personer i resa</label><input type="number" id="yb-tripper" placeholder="2" /></div>
+        <div><label>Person-balans (0–1)</label><input type="number" step="0.05" id="yb-balance" placeholder="0.40" /></div>
+      </div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="yb-vid" /> Inkludera videor</label>
+        <label class="check"><input type="checkbox" id="yb-screen" /> Inkludera skärmbilder</label>
+        <label class="check"><input type="checkbox" id="yb-nocam" /> Inkludera utan kamera-info</label>
+        <label class="check"><input type="checkbox" id="yb-nogps" /> Inkludera utan GPS</label>
+      </div>
+    </details>
+    <div class="checks">
+      <label class="check"><input type="checkbox" id="yb-dry" checked /> Förhandsvisning (skapa inget album)</label>
+    </div>
+    <button class="primary" id="yb-run">Kör</button>
+    <div class="console" id="yb-out"></div>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+// --- tab switching ---
+document.querySelectorAll("nav button").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll("nav button").forEach((x) => x.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    $("#tab-" + b.dataset.tab).classList.add("active");
+  };
+});
+
+// --- status poll ---
+async function poll() {
+  try {
+    const s = await (await fetch("/api/status")).json();
+    $("#dot-text").classList.toggle("on", s.text_loaded);
+    $("#dot-vlm").classList.toggle("on", s.vlm_loaded);
+  } catch (e) {}
+}
+poll();
+setInterval(poll, 4000);
+
+// --- SSE helper: POST JSON, stream "data:" frames, call onEvent per frame ---
+async function streamPost(url, body, onEvent) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) !== -1) {
+      const frame = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      const line = frame.split("\n").find((l) => l.startsWith("data: "));
+      if (line) onEvent(JSON.parse(line.slice(6)));
+    }
+  }
+}
+
+// --- chat ---
+const history = [];
+function addMsg(role, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + (role === "user" ? "user" : "bot");
+  d.textContent = text;
+  $("#chatlog").appendChild(d);
+  $("#chatlog").scrollTop = $("#chatlog").scrollHeight;
+  return d;
+}
+async function sendChat() {
+  const inp = $("#chat-input");
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = "";
+  $("#chat-send").disabled = true;
+  addMsg("user", text);
+  history.push({ role: "user", content: text });
+  const bot = addMsg("bot", "");
+  let acc = "";
+  try {
+    await streamPost("/api/chat", { messages: history }, (ev) => {
+      if (ev.token) { acc += ev.token; bot.textContent = acc; $("#chatlog").scrollTop = $("#chatlog").scrollHeight; }
+      else if (ev.error) { bot.textContent = "⚠️ " + ev.error; bot.classList.add("err"); }
+    });
+    history.push({ role: "assistant", content: acc });
+  } catch (e) {
+    bot.textContent = "⚠️ " + e;
+  } finally {
+    $("#chat-send").disabled = false;
+    inp.focus();
+  }
+}
+$("#chat-send").onclick = sendChat;
+$("#chat-reset").onclick = () => { history.length = 0; $("#chatlog").innerHTML = ""; };
+$("#chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+});
+
+// --- media (vision/audio) ---
+$("#media-images").addEventListener("change", (e) => {
+  const t = $("#media-thumbs"); t.innerHTML = "";
+  [...e.target.files].forEach((f) => {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(f); t.appendChild(img);
+  });
+});
+$("#media-run").onclick = async () => {
+  const fd = new FormData();
+  [...$("#media-images").files].forEach((f) => fd.append("images", f));
+  if ($("#media-audio").files[0]) fd.append("audio", $("#media-audio").files[0]);
+  fd.append("prompt", $("#media-prompt").value);
+  const out = $("#media-out");
+  out.textContent = "Analyserar lokalt…";
+  $("#media-run").disabled = true;
+  try {
+    const res = await fetch("/api/vision", { method: "POST", body: fd });
+    const j = await res.json();
+    out.textContent = j.error ? "⚠️ " + j.error : j.text;
+    out.classList.toggle("err", !!j.error);
+  } catch (e) {
+    out.textContent = "⚠️ " + e;
+  } finally {
+    $("#media-run").disabled = false;
+  }
+};
+
+// --- console runner for subprocess endpoints ---
+async function runConsole(url, body, btn, out) {
+  out.textContent = ""; btn.disabled = true;
+  const append = (t, cls) => {
+    const span = document.createElement("span");
+    if (cls) span.className = cls;
+    span.textContent = t + "\n";
+    out.appendChild(span);
+    out.scrollTop = out.scrollHeight;
+  };
+  try {
+    await streamPost(url, body, (ev) => {
+      if (ev.line !== undefined) append(ev.line);
+      else if (ev.error) append("⚠️ " + ev.error, "err");
+      else if (ev.done) append(ev.code ? `\n[avslutades med kod ${ev.code}]` : "\n✓ klart");
+    });
+  } catch (e) {
+    append("⚠️ " + e, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// --- photos ---
+$("#ph-run").onclick = () => runConsole("/api/photos", {
+  dry_run: $("#ph-dry").checked,
+  explicit_context: $("#ph-explicit").checked,
+  no_context: $("#ph-nocontext").checked,
+  no_caption: $("#ph-nocaption").checked,
+  no_keywords: $("#ph-nokeywords").checked,
+  replace_keywords: $("#ph-replace").checked,
+  style: $("#ph-style").value,
+}, $("#ph-run"), $("#ph-out"));
+
+// --- yearbook ---
+const num = (id) => { const v = $(id).value.trim(); return v === "" ? null : v; };
+$("#yb-run").onclick = () => runConsole("/api/yearbook", {
+  year: num("#yb-year"), count: num("#yb-count"), album: $("#yb-album").value.trim() || null,
+  holidays: $("#yb-holidays").value.trim() || null,
+  keep_per_scene: num("#yb-scene"), similarity_threshold: num("#yb-sim"),
+  max_per_cluster: num("#yb-cluster"), max_per_trip: num("#yb-trip"),
+  min_trip_size: num("#yb-tripsize"), min_trip_persons: num("#yb-tripper"),
+  person_balance: num("#yb-balance"),
+  include_videos: $("#yb-vid").checked, include_screenshots: $("#yb-screen").checked,
+  include_no_camera: $("#yb-nocam").checked, include_no_gps: $("#yb-nogps").checked,
+  dry_run: $("#yb-dry").checked,
+}, $("#yb-run"), $("#yb-out"));
+</script>
+</body>
+</html>
